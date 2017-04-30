@@ -1,17 +1,15 @@
 import org.apache.spark.sql.SparkSession
 
-import org.apache.spark.rdd.RDD
-import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.tree.DecisionTree
-import org.apache.spark.mllib.tree.model.DecisionTreeModel
 
 object Predict {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession
       .builder()
       .getOrCreate()
+    import spark.implicits._
     val flightData = spark.read.option("header", "true").csv("/Users/apple/.ivy/jars/design/2007.csv")
     val tmpFlightDataRDD = flightData.map(
       row => row(2).toString + "," // dayOfMonth
@@ -100,56 +98,65 @@ object Predict {
     val paramMaxBins = 7000
     val paramImpurity = "gini"
 
-    val flightDelayModel = DecisionTree.trainClassifier(trainingData, paramNumClasses, paramCateFeaturesInfo, paramImpurity, paramMaxDepth, paramMaxBins)
+    val flightDelayModel = DecisionTree.trainClassifier(trainingData.rdd, paramNumClasses, paramCateFeaturesInfo, paramImpurity, paramMaxDepth, paramMaxBins)
 
-    tmpDM = flightDelayModel.toDebugString
-    println(tmpDM)
+    val predictResult = testData.rdd.map{flight =>
+      val tmpPredictResult = flightDelayModel.predict(flight.features)
+      (flight.label, tmpPredictResult)
+    }
+
+    val numOfCorrectPrediction = predictResult.filter{case (label, result) => (label == result)}.count()
+    val predictAccuracy = numOfCorrectPrediction/testData.count().toDouble
+    println(predictAccuracy)
+
   }
+
+  def parseFields(input: String): Flight = {
+    val line = input.split(",")
+
+    // 针对可能出现的无效值“NA”进行过滤
+    var dayOfMonth = 0
+    if (line(0) != "NA") {
+      dayOfMonth = line(0).toInt
+    }
+    var dayOfWeek = 0
+    if (line(1) != "NA") {
+      dayOfWeek = line(1).toInt
+    }
+
+    var crsDepTime = 0.0
+    if (line(2) != "NA") {
+      crsDepTime = line(2).toDouble
+    }
+
+    var crsArrTime = 0.0
+    if (line(3) != "NA") {
+      crsArrTime = line(3).toDouble
+    }
+
+    var crsElapsedTime = 0.0
+    if (line(5) != "NA") {
+      crsElapsedTime = line(5).toDouble
+    }
+
+    var arrDelay = 0
+    if (line(8) != "NA") {
+      arrDelay = line(8).toInt
+    }
+    var depDelay = 0
+    if (line(9) != "NA") {
+      depDelay = line(9).toInt
+    }
+
+    // 根据延迟时间决定延迟标志是否为1
+    var delayFlag = 0
+    if (arrDelay > 30 || depDelay > 30) {
+      delayFlag = 1
+    }
+    Flight(dayOfMonth, dayOfWeek, crsDepTime, crsArrTime, line(4), crsElapsedTime, line(6), line(7), arrDelay, depDelay, delayFlag)
+  }
+
 }
 
-def parseFields(input: String): Flight = {
-  val line = input.split(",")
-
-  // 针对可能出现的无效值“NA”进行过滤
-  var dayOfMonth = 0
-  if (line(0) != "NA") {
-    dayOfMonth = line(0).toInt
-  }
-  var dayOfWeek = 0
-  if (line(1) != "NA") {
-    dayOfWeek = line(1).toInt
-  }
-
-  var crsDepTime = 0.0
-  if (line(2) != "NA") {
-    crsDepTime = line(2).toDouble
-  }
-
-  var crsArrTime = 0.0
-  if (line(3) != "NA") {
-    crsArrTime = line(3).toDouble
-  }
-
-  var crsElapsedTime = 0.0
-  if (line(5) != "NA") {
-    crsElapsedTime = line(5).toDouble
-  }
-
-  var arrDelay = 0
-  if (line(8) != "NA") {
-    arrDelay = line(8).toInt
-  }
-  var depDelay = 0
-  if (line(9) != "NA") {
-    depDelay = line(9).toInt
-  }
-
-  // 根据延迟时间决定延迟标志是否为1
-  var delayFlag = 0
-  if (arrDelay > 30 || depDelay > 30) {
-    delayFlag = 1
-  }
-  Flight(dayOfMonth, dayOfWeek, crsDepTime, crsArrTime, line(4), crsElapsedTime, line(6), line(7), arrDelay, depDelay, delayFlag)
-}
 
 case class Flight(dayOfMonth: Int, dayOfWeek: Int, crsDepTime: Double, crsArrTime: Double, uniqueCarrier: String, crsElapsedTime: Double, origin: String, dest: String, arrDelay: Int, depDelay: Int, delayFlag: Int)
