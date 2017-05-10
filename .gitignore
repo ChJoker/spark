@@ -84,4 +84,7 @@ fabric.properties
 将删除 .idea/vcs.xml
 将删除 ~/
 result*
+result/*
 *.iml
+.DS_Store/*
+.DS_Store

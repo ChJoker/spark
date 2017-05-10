@@ -61,7 +61,7 @@ object Predict {
 
     val LabeledRDD = featuredRDD.map(x => LabeledPoint(x(0), Vectors.dense(x(1), x(2), x(3), x(4), x(5), x(6), x(7), x(8))))
 
-    val notDelayedFlights = LabeledRDD.filter(x => x.label == 0).randomSplit(Array(0.8, 0.2))(1)
+    val notDelayedFlights = LabeledRDD.filter(x => x.label == 0).randomSplit(Array(0.8, 0.2))(0)
     val delayedFlights = LabeledRDD.filter(x => x.label == 1)
     val tmpTTData = notDelayedFlights.union(delayedFlights)
     val TTData = tmpTTData.randomSplit(Array(0.7, 0.3))
